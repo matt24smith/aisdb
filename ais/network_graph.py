@@ -113,12 +113,16 @@ def geofence(track_merged, domain):
             pickle.dump(track_stats, f)
     return
 
-def graph(merged, domain, parallel=0):
-    ''' perform geofencing in parallel, then concatenate aggregated transit 
-        statistics between nodes (zones) to create network edges from vessel
-        trajectories
 
-        output will be written to 'output.csv' inside the data_dir directory
+def graph(merged, domain, parallel=0):
+    ''' perform geofencing on vessel trajectories, then concatenate aggregated 
+        transit statistics between nodes (zones) to create network edges from 
+        vessel trajectories
+
+        this function will call geofence() for each trajectory in parallel, 
+        outputting serialized results to the tmp_dir directory. after 
+        deserialization, the temporary files are removed, and output will be 
+        written to 'output.csv' inside the data_dir directory
 
         args:
             merged: ais.track_gen.trackgen() trajectory iterator (or one of its wrapper functions)
@@ -130,6 +134,8 @@ def graph(merged, domain, parallel=0):
             parallel: integer
                 number of processes to compute geofencing in parallel.
                 if set to 0 or False, no parallelization will be used
+
+        returns: None
     '''
     
     if not parallel: 
@@ -146,6 +152,7 @@ def graph(merged, domain, parallel=0):
     outputfile = os.path.join(data_dir, 'output.csv')
 
     with open(outputfile, 'a') as output:
+
         with open(picklefiles[0], 'rb') as f0:
             getrow = pickle.load(f0)
             output.write(','.join(map(str, getrow.keys())) + '\n')
@@ -160,7 +167,6 @@ def graph(merged, domain, parallel=0):
                         break
                     except Exception as e:
                         raise e
-                    #results = np.vstack((results, getrows))
                     results.append(','.join(map(str, getrow.values())))
             output.write('\n'.join(results) +'\n')
             os.remove(os.path.join(tmp_dir, picklefile))
