@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+//#![allow(dead_code)]
 
 ///
 /// AISDB Rust CLI
@@ -30,12 +30,12 @@ use nmea_parser::ParsedMessage;
 use crate::decode::VesselData;
 
 #[derive(Debug)]
-pub struct AppArgs {
-    pub dbpath: std::path::PathBuf,
+pub(crate) struct AppArgs {
+    pub(crate) dbpath: std::path::PathBuf,
     //pub rawdata_dir: std::path::Path,
-    pub rawdata_dir: String,
-    pub start: usize,
-    pub end: usize,
+    pub(crate) rawdata_dir: String,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
 pub fn parse_path(s: &std::ffi::OsStr) -> Result<std::path::PathBuf, &'static str> {
@@ -43,7 +43,7 @@ pub fn parse_path(s: &std::ffi::OsStr) -> Result<std::path::PathBuf, &'static st
 }
 
 /// collect --dbpath and --rawdata_dir args from command line
-pub fn parse_args() -> Result<AppArgs, pico_args::Error> {
+pub(crate) fn parse_args() -> Result<AppArgs, pico_args::Error> {
     let mut pargs = pico_args::Arguments::from_env();
 
     if pargs.contains(["-h", "--help"]) || pargs.clone().finish().is_empty() {

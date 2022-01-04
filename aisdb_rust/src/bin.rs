@@ -38,14 +38,18 @@ pub async fn main() -> Result<(), Error> {
 
     let start = Instant::now();
     let _ =
-        concurrent_insert_dir(&args.rawdata_dir, Some(&args.dbpath), args.start, args.end).await;
+        //concurrent_insert_dir(&args.rawdata_dir, Some(&args.dbpath), args.start, args.end).await;
+        concurrent_insert_dir(&args).await;
     let elapsed = start.elapsed();
 
     println!("total insert time: {} minutes", elapsed.as_secs_f32() / 60.,);
 
-    let sql = "VACUUM INTO '/run/media/matt/My Passport/test_vacuum_rust.db'";
+    let sql = format!(
+        "VACUUM INTO '{}'.vacuum",
+        &args.dbpath.as_path().to_str().unwrap()
+    );
     let conn = get_db_conn(Some(&args.dbpath)).unwrap();
-    conn.execute(sql, []).unwrap();
+    conn.execute(&sql, []).unwrap();
 
     Ok(())
 }

@@ -5,6 +5,8 @@ use futures::StreamExt;
 
 //use std::fs::read_dir;
 use std::cmp::min;
+use std::path::Path;
+use std::path::PathBuf;
 use std::time::Instant;
 
 //use futures::stream::iter;
@@ -16,14 +18,21 @@ mod util;
 
 use crate::decodemsgs;
 use crate::VesselData;
+
 use util::glob_dir;
 
 /// open a new database connection at the specified path
-pub fn get_db_conn(path: Option<&std::path::Path>) -> Result<Connection> {
-    let conn = match path {
-        Some(p) => Connection::open(p).unwrap(),
-        None => Connection::open_in_memory().unwrap(),
-    };
+//pub fn get_db_conn(path: Option<&std::path::Path>) -> Result<Connection> {
+pub fn get_db_conn(path: Option<std::path::PathBuf>) -> Result<Connection> {
+    //let conn = match path {
+    //    Path::new(":memory:") =>
+    //};
+    let mut conn = Connection::open_in_memory();
+    if path.to_string() == ":memory:".to_string() {
+        let conn = Connection::open(path).unwrap();
+    } else {
+        let conn = Connection::open_in_memory().unwrap();
+    }
     conn.execute_batch(
         "
         PRAGMA journal_mode = OFF;
@@ -216,14 +225,16 @@ pub fn sqlite_insert_dynamic(tx: &Transaction, msgs: Vec<VesselData>, mstr: &str
 }
 
 /// parse files and insert into DB using concurrent asynchronous runners
-pub async fn concurrent_insert_dir(
-    rawdata_dir: &str,
-    dbpath: Option<&std::path::Path>,
-    start: usize,
-    end: usize,
+pub(crate) async fn concurrent_insert_dir(
+    //rawdata_dir: &str,
+    //dbpath: Option<std::path::PathBuf>,
+    //dbpath: Option<P>,
+    //start: usize,
+    //end: usize,
+    args: &crate::util::AppArgs,
 ) -> Result<()> {
-    let fpaths: Vec<String> = glob_dir(rawdata_dir, "nm4", 0).expect("globbing");
-    let fpaths_rng = &fpaths.as_slice()[start..min(end, fpaths.len())];
+    let fpaths: Vec<String> = glob_dir(&args.rawdata_dir, "nm4", 0).expect("globbing");
+    let fpaths_rng = &fpaths.as_slice()[args.start..min(args.end, fpaths.len())];
 
     iter(fpaths_rng)
         // TODO: clean this up
@@ -234,7 +245,7 @@ pub async fn concurrent_insert_dir(
                 Utc,
             );
             let mstr = filedate.format("%Y%m").to_string();
-            let mut c = get_db_conn(dbpath).expect("getting db conn");
+            let mut c = get_db_conn(Some(&args.dbpath)).expect("getting db conn");
             let t = c.transaction();
             let _newtab2 = sqlite_createtable_dynamicreport(&t.as_ref().unwrap(), &mstr)
                 .expect("creating dynamic table");
@@ -268,6 +279,7 @@ mod tests {
     use crate::decodemsgs;
     use util::glob_dir;
     use util::parse_args;
+    //pub use util::AppArgs;
 
     fn testing_dbpaths() -> (
         Option<&'static std::path::Path>,
@@ -298,11 +310,16 @@ mod tests {
         let mstr = "00test00";
         let pargs = parse_args();
         let args = match pargs {
-            Ok(v) => v,
+            Ok(v) => crate::util::AppArgs {
+                rawdata_dir: v.rawdata_dir,
+                dbpath: v.dbpath,
+                start: v.start,
+                end: v.end,
+            },
             Err(ref e) => {
                 eprintln!("need to input dbpath!: {}", e);
                 //std::process::exit(1);
-                util::AppArgs {
+                crate::util::AppArgs {
                     dbpath: Path::new(":memory:").to_path_buf(),
                     rawdata_dir: pargs.unwrap().rawdata_dir,
                     start: 0,
@@ -362,16 +379,19 @@ mod tests {
     }
     #[async_std::test]
     async fn test_concurrent_insert() {
-        let args = parse_args().unwrap();
+        let mut args: crate::util::AppArgs = crate::util::parse_args().unwrap();
         let dbpaths = &testing_dbpaths();
 
         println!("\nTESTING DATABASE {:?}", &dbpaths.0);
-        let _ = concurrent_insert_dir(&args.rawdata_dir, dbpaths.0, 0, 5).await;
+        args.dbpath = dbpaths.0.unwrap().to_path_buf();
+        let _ = concurrent_insert_dir(&args).await;
 
         println!("\nTESTING DATABASE {:?}", &dbpaths.1);
-        let _ = concurrent_insert_dir(&args.rawdata_dir, dbpaths.1, 0, 5).await;
+        args.dbpath = dbpaths.1.unwrap().to_path_buf();
+        let _ = concurrent_insert_dir(&args).await;
 
         println!("\nTESTING DATABASE {:?}", &dbpaths.2);
-        let _ = concurrent_insert_dir(&args.rawdata_dir, dbpaths.2, 0, 5).await;
+        args.dbpath = dbpaths.2.unwrap().to_path_buf();
+        let _ = concurrent_insert_dir(&args).await;
     }
 }
