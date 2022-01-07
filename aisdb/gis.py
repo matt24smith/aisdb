@@ -13,7 +13,7 @@ from shapely.geometry.collection import GeometryCollection
 from common import dbpath
 from index import index
 
-shiftcoord = lambda x: ((np.array(x) + 180) % 360) - 180
+shiftcoord = lambda x, rng=360: ((np.array(x) + (rng / 2)) % 360) - (rng / 2)
 
 
 def dt_2_epoch(dt_arr, t0=datetime(1970, 1, 1, 0, 0, 0)):

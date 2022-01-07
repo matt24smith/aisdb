@@ -355,6 +355,10 @@ class ApplicationWindow(QMainWindow):
 
     def set_canvas_boundary(self, xmin=-180, ymin=-90, xmax=180, ymax=90):
         ''' set the map canvas boundary '''
+        xmin = max(xmin, -180)
+        xmax = min(xmax, 180)
+        ymin = max(ymin, -90)
+        ymax = min(ymax, 90)
         xy1 = self.xform.transform(QgsPointXY(xmin, ymin))
         xy2 = self.xform.transform(QgsPointXY(xmax, ymax))
         ext = QgsRectangle(xy1.x(), xy1.y(), xy2.x(), xy2.y())
@@ -435,7 +439,8 @@ class ApplicationWindow(QMainWindow):
 
     def add_feature_line(self, geom, ident, color=None, opacity=None):
         ''' add a shapely.geometry.LineString object to the map canvas '''
-        if color is None: color = (colorhash(ident), )
+        if color is None:
+            color = (colorhash(ident), )
         r = QgsRubberBand(self.canvas, True)
         for i in range(0, len(geom.coords.xy[0]), 10000):
             pts = [
@@ -450,22 +455,28 @@ class ApplicationWindow(QMainWindow):
             self.features_line.append((ident, r))
 
     def add_feature_poly(self, geom, ident, color=None, opacity=None):
-        ''' add a shapely.geometry.Polygon or shapely.geometry.LineString object to the map canvas '''
-        if color is None: color = (colorhash(ident), )
+        ''' add a shapely.geometry.Polygon or
+            shapely.geometry.LineString object to the map canvas '''
+
+        if color is None:
+            color = (colorhash(ident), )
         r = QgsRubberBand(self.canvas, True)
         if geom.type == 'LinearRing':
             pts = [
-                self.xform.transform(QgsPointXY(x, y))
+                self.xform.transform(
+                    QgsPointXY(min(180, max(x, -180)), min(90, max(y, -90))))
                 for x, y in zip(*geom.coords.xy)
             ]
         elif geom.type == 'Polygon':
             pts = [
-                self.xform.transform(QgsPointXY(x, y))
+                self.xform.transform(
+                    QgsPointXY(min(180, max(x, -180)), min(90, max(y, -90))))
                 for x, y in zip(*geom.boundary.coords.xy)
             ]
         elif geom.type == 'GeometryCollection':
             pts = reduce(list.__add__, [[
-                self.xform.transform(QgsPointXY(x, y))
+                self.xform.transform(
+                    QgsPointXY(min(180, max(x, -180)), min(90, max(y, -90))))
                 for x, y in zip(*g.boundary.coords.xy)
             ] for g in geom.geoms])
         else:
