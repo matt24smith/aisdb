@@ -14,7 +14,7 @@ import numpy as np
 import pyais
 
 from aisdb.common import tmp_dir
-from database.create_tables import createfcns, aggregate_static_msg5_msg24
+from database.create_tables import createfcns, aggregate_static_msgs
 from database.insert_tables import insertfcns
 from gis import dt_2_epoch
 from database.dbconn import DBConn
@@ -182,10 +182,8 @@ def insert_serialized(dbpath, delete=True):
             os.remove(os.path.join(tmp_dir, serialized))
             continue
 
-        cur.execute(
-            'SELECT name FROM sqlite_master WHERE type="table" '
-            f'AND name="rtree_{mstr}_msg_1_2_3" '
-        )
+        cur.execute('SELECT name FROM sqlite_master WHERE type="table" '
+                    f'AND name="rtree_{mstr}_msg_1_2_3" ')
         if not cur.fetchall():
             print(f'creating database tables for month {mstr}...')
             for fcn in createfcns.values():
@@ -214,7 +212,7 @@ def insert_serialized(dbpath, delete=True):
     conn.close()
 
     # aggregate and index static reports: msg5, msg24
-    aggregate_static_msg5_msg24(dbpath, months_str)
+    aggregate_static_msgs(dbpath, months_str)
 
 
 def decode_msgs(filepaths, dbpath, processes=12, delete=True):
@@ -228,7 +226,7 @@ def decode_msgs(filepaths, dbpath, processes=12, delete=True):
         after the messages are loaded into preliminary tables in the database,
         database triggers are used to update the intermediary tables for the
         dynamic message data.
-        this function will also call aggregate_static_msg5_msg24() to
+        this function will also call aggregate_static_msgs() to
         generate an aggregate result table from the static report data
 
         the intended usage is to store and preprocess messages for an entire

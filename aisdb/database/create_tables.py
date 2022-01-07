@@ -278,7 +278,7 @@ def create_table_msg24(cur, month):
     #else: assert False
 
 
-def aggregate_static_msg5_msg24(dbpath, months_str):
+def aggregate_static_msgs(dbpath, months_str):
     ''' collect an aggregate of static vessel reports for each unique MMSI
         identifier. The most frequently repeated values for each MMSI will
         be kept in instances where there are different reports for the same MMSI
@@ -302,7 +302,7 @@ def aggregate_static_msg5_msg24(dbpath, months_str):
             f'aggregating static reports 5, 24 into static_{month}_aggregate...'
         )
         cur.execute(f''' DROP TABLE IF EXISTS static_{month}_aggregate ''')
-
+        '''
         cur.execute(f"""
             SELECT DISTINCT m5.mmsi
               FROM ais_{month}_msg_5 AS m5
@@ -310,6 +310,10 @@ def aggregate_static_msg5_msg24(dbpath, months_str):
             SELECT DISTINCT m24.mmsi
               FROM ais_{month}_msg_24 AS m24
               ORDER BY 1 """)
+        '''
+        cur.execute(f"""
+            SELECT DISTINCT s.mmsi
+              FROM ais_{month}_static AS s """)
         mmsis = np.array(cur.fetchall(), dtype=object).flatten()
 
         fancyprint = lambda cols, widths=[
@@ -326,6 +330,7 @@ def aggregate_static_msg5_msg24(dbpath, months_str):
 
         agg_rows = []
         for mmsi in mmsis:
+            '''
             _ = cur.execute(
                 f"""
             SELECT m5.mmsi, m5.vessel_name, m5.ship_type, m5.dim_bow,
@@ -338,6 +343,14 @@ def aggregate_static_msg5_msg24(dbpath, months_str):
               FROM ais_{month}_msg_24 AS m24
               WHERE m24.mmsi = ?
             """, [mmsi, mmsi])
+            '''
+            _ = cur.execute(
+                f"""
+            SELECT s.mmsi, s.vessel_name, s.ship_type, s.dim_bow,
+                s.dim_stern, s.dim_port, s.dim_star, s.imo
+              FROM ais_{month}_static AS s
+              WHERE s.mmsi = ?
+            """, [mmsi])
             cols = np.array(cur.fetchall(), dtype=object).T
             assert len(cols) > 0
             filtercols = np.array([
@@ -370,8 +383,7 @@ def aggregate_static_msg5_msg24(dbpath, months_str):
             ) ''')
         cur.executemany(
             f''' INSERT INTO static_{month}_aggregate
-                    VALUES (?,?,?,?,?,?,?,?) ''',
-            skip_nommsi)
+                    VALUES (?,?,?,?,?,?,?,?) ''', skip_nommsi)
 
         conn.commit()
     conn.close()
