@@ -1,9 +1,11 @@
 # base dependencies
 FROM archlinux:base AS aisdb
-RUN pacman -Syyuu --noconfirm
-#\
-   #&& pacman -S --noconfirm 
-   #gcc 
+# https://wiki.archlinux.org/title/Pacman/Tips_and_tricks#Removing_everything_but_essential_packages
+RUN pacman -Syyuu --noconfirm \
+  && pacman -S python rust --noconfirm \
+  && pacman -D --asdeps `pacman -Qqe` \
+  && pacman -D --asexplicit --noconfirm python rust pacman systemd \
+  && pacman -Rncs --noconfirm `pacman -Qtdq` 
 ARG USERNAME
 RUN useradd -m "$USERNAME" --shell /bin/python
 WORKDIR "/home/$USERNAME"
@@ -11,14 +13,14 @@ WORKDIR "/home/$USERNAME"
 
 # run package tests
 FROM aisdb AS runtest
-RUN pacman -S --noconfirm python qgis gcc
+RUN pacman -S --noconfirm --needed qgis nodejs npm python-sphinx python-sphinx_rtd_theme
 ARG USERNAME
 USER "$USERNAME"
 RUN python -m ensurepip && python -m pip install --no-warn-script-location --upgrade wheel pip numpy pytest
 COPY --chown="$USERNAME" ./setup.py "/home/$USERNAME/setup.py"
 RUN mkdir -p aisdb/database aisdb/webdata && python -m pip install . --no-warn-script-location
-COPY --chown="$USERNAME" aisdb/ aisdb/
 COPY --chown="$USERNAME" tests/ tests/
+COPY --chown="$USERNAME" aisdb/ aisdb/ 
 CMD ["python", "-m", "pytest", "--color=yes", "-x", "--tb=native", "tests/"]
 
 
@@ -27,18 +29,17 @@ FROM runtest AS sshhost
 USER root
 RUN pacman -S --noconfirm --needed openssh xorg-xauth 
 COPY --chown="$USERNAME" docker/entry.py ./entry.py
-COPY --chown="$USERNAME" examples/ examples/
-COPY --chown="$USERNAME" aisdb/ aisdb/
 ENTRYPOINT ["python", "./entry.py"]
 
 
 # build and test rust targets
 FROM aisdb as compile
-#RUN pacman -S pkgconf rust --noconfirm
-RUN pacman -S --noconfirm --needed nodejs npm python python-sphinx python-sphinx_rtd_theme pkgconf rust 
 ARG USERNAME
 USER "$USERNAME"
-RUN mkdir -p aisdb aisdb_rust/src \
+RUN mkdir -p aisdb_rust/src \
+  && echo 'fn main(){}' > aisdb_rust/src/db.rs \
+  && echo 'fn main(){}' > aisdb_rust/src/decode.rs \
+  && echo 'fn main(){}' > aisdb_rust/src/util.rs \
   && echo 'fn main(){}' > aisdb_rust/src/bin.rs
 COPY --chown="$USERNAME" aisdb_rust/Cargo.toml aisdb_rust/Cargo.toml
 RUN cargo build \
@@ -53,14 +54,13 @@ CMD ["cargo", "test", "--manifest-path=aisdb_rust/Cargo.toml", "--release", "--c
 
 
 # sphinx docs + rust cargo docs
-FROM compile AS webserv
-USER root
+FROM runtest AS webserv
 ARG USERNAME
 USER "$USERNAME"
 RUN npm install express
-COPY --chown="$USERNAME" docker/ docker/
-COPY --chown="$USERNAME" readme.rst ./
+COPY --chown="$USERNAME" nodejs/ nodejs/
 COPY --chown="$USERNAME" docs/ docs/
-COPY --chown="$USERNAME" aisdb/ aisdb/ readme.rst ./
+COPY --chown="$USERNAME" readme.rst ./readme.rst
+COPY --chown="$USERNAME" aisdb_rust/ aisdb_rust/
 RUN /bin/bash /home/"$USERNAME"/docs/sphinxbuild.sh
-CMD ["npm", "--prefix", "docker/", "start"]
+CMD ["npm", "--prefix", "nodejs/", "start"]

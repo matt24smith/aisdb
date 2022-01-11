@@ -1,7 +1,7 @@
 import os
 from aisdb import rawdata_dir, dbpath
 
-from aisdb.database import aggregate_static_msgs
+#from aisdb.database.create_tables import aggregate_static_msgs
 
 
 def rust_db_from_rawdata_dir():
