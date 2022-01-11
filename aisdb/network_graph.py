@@ -1,34 +1,28 @@
 ''' collect vessel transits between zones (nodes), and aggregate various trajectory statistics '''
 
 import os
-from multiprocessing import Pool  #, set_start_method
+from multiprocessing import Pool
 import pickle
 from functools import partial, reduce
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import numpy as np
-from shapely.geometry import Point, LineString, Polygon
 
-from common import *
+from aisdb import tmp_dir, output_dir
 from gis import (
-    Domain,
-    ZoneGeom,
     delta_knots,
     delta_meters,
-    delta_seconds,
     epoch_2_dt,
 )
 from track_gen import (
     fence_tracks,
-    max_tracklength,
     segment_rng,
-    #segment_tracks_dbscan,
     segment_tracks_encode_greatcircledistance,
-    segment_tracks_timesplits,
     trackgen,
+    # max_tracklength,
+    # segment_tracks_timesplits,
 )
-from proc_util import deserialize_generator
-from webdata.merge_data import merge_layers
+# from webdata.merge_data import merge_layers
 
 # returns absolute value of bathymetric depths with topographic heights converted to 0
 depth_nonnegative = lambda track, zoneset: np.array(
@@ -53,7 +47,8 @@ staticinfo = lambda track: dict(
     mmsi=track['mmsi'],
     imo=track['imo'] or '',
     label=track['label'] if 'label' in track.keys() else '',
-    vessel_name=track['vessel_name'] or '',
+    vessel_name=track['vessel_name'].replace("'", '').replace('"', '').replace(
+        ',', '').replace('`', '') or '',
     #vessel_type=track['ship_type_txt'] or '',
     #domainname                          =   domain.name,
     vessel_length=(track['dim_bow'] + track['dim_stern']) or '',
@@ -64,8 +59,8 @@ staticinfo = lambda track: dict(
 
 # collect aggregated statistics on vessel positional data
 transitinfo = lambda track, zoneset: dict(
-    src_zone=f"{int(track['in_zone'][zoneset][0][1:]):03}",
-    rcv_zone=f"{int(track['in_zone'][zoneset][-1][1:]):03}",
+    src_zone=f"{int(track['in_zone'][zoneset][0].split('Z')[1]):03}",
+    rcv_zone=f"{int(track['in_zone'][zoneset][-1].split('Z')[1]):03}",
     transit_nodes=
     f"{track['in_zone'][zoneset][0]}_{track['in_zone'][zoneset][-1]}",
     num_datapoints=len(track['time'][zoneset]),
@@ -134,7 +129,7 @@ def serialize_network_edge(tracks,
     for track in tracks:
         filepath = os.path.join(tmp_dir, str(track['mmsi']).zfill(9))
         if not 'in_zone' in track.keys():
-            get_zones = fence([track], domain=domain)
+            get_zones = fence_tracks([track], domain=domain)
             track = next(get_zones)
             assert list(get_zones) == []
 
@@ -212,6 +207,7 @@ def aggregate_output(filename='output.csv',
 
 
 def graph_cpu_bound(track, domain, **params):
+    ''' will probably be removed in a later version '''
     #timesplit = partial(segment_tracks_timesplits, maxdelta=cuttime)
     distsplit = partial(segment_tracks_encode_greatcircledistance, **params)
     geofenced = partial(fence_tracks, domain=domain)
@@ -226,8 +222,9 @@ def graph_cpu_bound(track, domain, **params):
 
 
 def graph_blocking_io(rowgen, domain):
-    ''' helper utility for loading from pickle. do not use, will probably be removed in a later version '''
-    for x in merge_layers(trackgen(rowgen)):
+    ''' will probably be removed in a later version '''
+    #for x in merge_layers(trackgen(rowgen)):
+    for x in trackgen(rowgen):
         yield x
 
 
