@@ -14,7 +14,7 @@ import numpy as np
 import pyais
 
 from aisdb.common import tmp_dir
-from database.create_tables import createfcns, aggregate_static_msgs
+#from database.create_tables import createfcns, aggregate_static_msgs
 from database.insert_tables import insertfcns
 from gis import dt_2_epoch
 from database.dbconn import DBConn

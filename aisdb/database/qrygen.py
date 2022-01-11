@@ -10,8 +10,8 @@ from shapely.geometry import Polygon
 from aisdb.common import dbpath, data_dir
 from database.qryfcn import crawl
 from database.dbconn import DBConn
-from database.lambdas import dt2monthstr, arr2polytxt
-from database.create_tables import createfcns
+from database.lambdas import dt2monthstr, arr2polytxt, epoch2monthstr
+from database.create_tables import createfcns, aggregate_static_msgs
 
 
 class DBQuery(UserDict):
@@ -20,12 +20,12 @@ class DBQuery(UserDict):
 
         self.data = kwargs
 
-        if 'xy' in self.keys(
-        ) and not 'x' in self.keys() and not 'y' in self.keys():
+        if 'xy' in self.keys() and 'x' not in self.keys(
+        ) and 'y' not in self.keys():
             self['x'] = self['xy'][::2]
             self['y'] = self['xy'][1::2]
 
-        #if sum(map(lambda t: t in kwargs.keys(), ('start', 'end',))) == 2:
+        # if sum(map(lambda t: t in kwargs.keys(), ('start', 'end',))) == 2:
         if 'start' in self.data.keys() and 'end' in self.data.keys():
             if isinstance(kwargs['start'], datetime):
                 self.data.update({'months': dt2monthstr(**kwargs)})
@@ -45,7 +45,6 @@ class DBQuery(UserDict):
                     self['y']), 'coordinate arrays are not equivalent length'
                 assert Polygon(zip(self.data['x'],
                                    self.data['y'])).is_valid, 'invalid polygon'
-
                 self.data['poly'] = arr2polytxt(x=self.data['x'],
                                                 y=self.data['y'])
 
@@ -59,18 +58,50 @@ class DBQuery(UserDict):
     #    #return '\nUNION '.join(map(partial(qryfcn, callback=callback, kwargs=self), self['months'])) + '\nORDER BY 1, 2'
     #    return crawl(**self)
 
-    def run_qry(self, fcn=crawl, dbpath=dbpath):
+    def check_idx(self, dbpath=dbpath):
+        aisdatabase = DBConn(dbpath)
+        for month in self.data['months']:
+            aisdatabase.cur.execute(
+                f'create index if not exists idx_{month}_t_x_y on ais_202111_dynamic (time, longitude, latitude) ;'
+            )
+            aisdatabase.cur.execute(
+                f'SELECT * FROM sqlite_master WHERE type="table" and name="static_{month}_aggregate"'
+            )
+            result = aisdatabase.cur.fetchall()
+            if len(result) == 0:
+                aggregate_static_msgs(dbpath, [month])
+
+    def run_qry(self, fcn=crawl, dbpath=dbpath, printqry=True):
         ''' generates a query using self.crawl(), runs it, then returns the resulting rows '''
         #qry = self.crawl(callback=callback, qryfcn=qryfcn)
-        qry = fcn(**self)
-        print(qry)
+        q = fcn(**self)
+        if printqry:
+            print(q)
 
         aisdatabase = DBConn(dbpath)
-        aisdatabase.cur.execute(qry)
+
+        assert self.data['start'] < self.data['end'], 'invalid time range'
+        assert len(self.data['months']) >= 1, f'bad qry {self=}'
+        '''
+        for month in self.data['months']:
+            aisdatabase.cur.execute(
+                f'create index if not exists idx_{month}_t_x_y on ais_202111_dynamic (time, longitude, latitude) ;'
+            )
+            aisdatabase.cur.execute(
+                f'SELECT * FROM sqlite_master WHERE type="table" and name="static_{month}_aggregate"'
+            )
+            result = aisdatabase.cur.fetchall()
+            if len(result) == 0:
+                aggregate_static_msgs(dbpath, [month])
+        '''
+        self.check_idx()
+
+        aisdatabase.cur.execute(q)
         res = aisdatabase.cur.fetchall()
         aisdatabase.conn.close()
         return np.array(res)
-        '''
+
+    '''
         with concurrent.futures.ThreadPoolExecutor() as executor:
             #aisdatabase = DBConn(dbpath)
             future = executor.submit(self.qry_thread, dbpath=dbpath, qry=qry)
@@ -95,6 +126,7 @@ class DBQuery(UserDict):
                 rows are sorted by time
 
         '''
+        self.check_idx()
         # create query to crawl db
         qry = fcn(**self)
 
