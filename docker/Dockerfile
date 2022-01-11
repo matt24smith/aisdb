@@ -23,7 +23,8 @@ RUN mkdir -p ais ais/tmp_parsing ais/zones ais/rawdata_dir ais/scriptoutput aisd
   && python -m pip install . --no-warn-script-location 
 COPY --chown="$USERNAME" tests/ tests/
 COPY --chown="$USERNAME" aisdb/ aisdb/ 
-CMD ["python", "-m", "pytest", "--color=yes", "--tb=native", "tests/", "-k", "not qgis"]
+# disable tests that require X11 or web data sources
+CMD ["python", "-m", "pytest", "--color=yes", "--tb=native", "-s", "tests/", "-k", "not qgis and not merge" ]
 
 
 # forward X11 on sshd host
@@ -51,7 +52,7 @@ COPY --chown="$USERNAME" aisdb_rust/ aisdb_rust/
 RUN cargo build \
     --manifest-path=/home/"$USERNAME"/aisdb_rust/Cargo.toml \
     --release
-RUN mkdir -p testdata/
+RUN mkdir -p testdata/ && chmod -R "$USERNAME" .
 CMD ["cargo", "test", "--manifest-path=aisdb_rust/Cargo.toml", "--release", "--color=always", "--", "--nocapture" ]
 
 

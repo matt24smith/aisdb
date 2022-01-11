@@ -11,7 +11,12 @@ from aisdb.common import dbpath, data_dir
 from database.qryfcn import crawl
 from database.dbconn import DBConn
 from database.lambdas import dt2monthstr, arr2polytxt, epoch2monthstr
-from database.create_tables import createfcns, aggregate_static_msgs
+from database.create_tables import (
+    aggregate_static_msgs,
+    createfcns,
+    sqlite_createtable_dynamicreport,
+    sqlite_createtable_staticreport,
+)
 
 
 class DBQuery(UserDict):
@@ -35,12 +40,10 @@ class DBQuery(UserDict):
                 assert False
 
         if 'x' in self.data.keys() and 'y' in self.data.keys():
+            xy = (self['x'], self['y'])
+            matching = [(list, np.ndarray, tuple) for _ in range(2)]
 
-            if sum(
-                    map(isinstance, (
-                        self['x'],
-                        self['y'],
-                    ), [(list, np.ndarray, tuple) for _ in range(2)])) == 2:
+            if sum(map(isinstance, xy, matching)) == 2:
                 assert len(self['x']) == len(
                     self['y']), 'coordinate arrays are not equivalent length'
                 assert Polygon(zip(self.data['x'],
@@ -53,21 +56,37 @@ class DBQuery(UserDict):
 
     def check_idx(self, dbpath=dbpath):
         aisdatabase = DBConn(dbpath)
+        cur = aisdatabase.cur
         for month in self.data['months']:
-            aisdatabase.cur.execute(
+            cur.execute(
+                'SELECT * FROM sqlite_master WHERE type="table" and name=?',
+                [f'ais_{month}_static'])
+            if len(cur.fetchall()) == 0:
+                sqlite_createtable_staticreport(cur, month)
+
+            cur.execute(
                 'SELECT * FROM sqlite_master WHERE type="table" and name=?',
                 [f'static_{month}_aggregate'])
-            if len(aisdatabase.cur.fetchall()) == 0:
+
+            if len(cur.fetchall()) == 0:
                 print(f'building static index for month {month}...')
                 aggregate_static_msgs(dbpath, [month])
-            aisdatabase.cur.execute(
+
+            cur.execute(
+                'SELECT * FROM sqlite_master WHERE type="table" and name=?',
+                [f'ais_{month}_dynamic'])
+            if len(cur.fetchall()) == 0:
+                sqlite_createtable_dynamicreport(cur, month)
+
+            cur.execute(
                 'SELECT * FROM sqlite_master WHERE type="index" and name=?',
                 [f'idx_{month}_t_x_y'])
-            if len(aisdatabase.cur.fetchall()) == 0:
+
+            if len(cur.fetchall()) == 0:
                 print(f'building dynamic index for month {month}...')
-                aisdatabase.cur.execute(
-                    f'CREATE INDEX idx_{month}_t_x_y ON ais_{month}_dynamic (time, longitude, latitude)'
-                )
+                cur.execute(
+                    f'CREATE INDEX IF NOT EXISTS idx_{month}_t_x_y '
+                    f'ON ais_{month}_dynamic (time, longitude, latitude)')
 
     def run_qry(self, fcn=crawl, dbpath=dbpath, printqry=True):
         ''' queries the database using the supplied sql function and dbpath
@@ -96,24 +115,9 @@ class DBQuery(UserDict):
         aisdatabase.conn.close()
         return np.array(res)
 
-    '''
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            #aisdatabase = DBConn(dbpath)
-            future = executor.submit(self.qry_thread, dbpath=dbpath, qry=qry)
-            try:
-                res = future.result()
-            except KeyboardInterrupt as err:
-                print('interrupted!')
-                aisdatabase.conn.interrupt()
-            except Exception as err:
-                raise err
-            finally:
-                aisdatabase.conn.close()
-        '''
-
-    #async def gen_qry(self, fcn=crawl, dbpath=dbpath):
     def gen_qry(self, fcn=crawl, dbpath=dbpath):
-        ''' similar to run_qry, but in a generator format for smaller memory footprint
+        ''' similar to run_qry, but in a generator format
+            only stores one item in memory at a time
 
             yields:
                 numpy array of rows for each unique MMSI
@@ -122,7 +126,6 @@ class DBQuery(UserDict):
 
         '''
         self.check_idx()
-        # create query to crawl db
         qry = fcn(**self)
 
         # initialize db, run query

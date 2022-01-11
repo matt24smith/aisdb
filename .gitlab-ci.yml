@@ -1,11 +1,9 @@
-before_script:
-  - apt-get 
+before script:
+  - apk add docker docker-compose 
 
-python-package:
-  type: build
-  stage: build
-  only: 
-    - test-ci
-    - submodule
+
+python-tests:
+  type: test 
+  stage: test
   script:
     - docker-compose up aisdb_test --build 

@@ -31,7 +31,10 @@ def test_network_graph():
         ymax=domain.maxY,
         callback=in_bbox,
     )
-    rowgen = args.gen_qry()
+    rows = args.run_qry()
+    if len(rows) == 0:
+        print('no rows found in bbox, exiting...')
+        return
 
     distsplit = partial(segment_tracks_encode_greatcircledistance,
                         maxdistance=250000,
@@ -40,7 +43,7 @@ def test_network_graph():
                         minscore=5e-07)
     geofenced = partial(fence_tracks, domain=domain)
     #serialize = partial(serialize_network_edge, domain=domain)
-    gen = trackgen(rowgen)
+    gen = trackgen(rows)
     next(gen)
     #pipeline = serialize(geofenced(distsplit(gen)))
     #next(pipeline)
