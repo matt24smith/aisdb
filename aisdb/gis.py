@@ -62,7 +62,9 @@ def delta_seconds(track, rng):
             (track['time'][rng][1:] - track['time'][rng][:-1])))
 
 
-def delta_knots(track, rng):
+def delta_knots(track, rng=None):
+    if rng is None:
+        rng = range(len(track['time']))
     return delta_meters(track, rng) / delta_seconds(track, rng) * 1.9438445
 
 
@@ -214,8 +216,8 @@ class Domain():
 
     '''
 
-    def __init__(self, name=None, geoms=[], cache=True, clearcache=False):
-        if len(geoms) == 0:
+    def __init__(self, name=None, geoms={}, cache=True, clearcache=False):
+        if len(geoms.keys()) == 0:
             assert False, 'domain needs to have atleast one polygon geometry'
         self.name = name
         self.geoms = geoms

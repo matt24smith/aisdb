@@ -86,6 +86,10 @@ else:
         os.mkdir(os.path.dirname(cfgfile))
     with open(cfgfile, 'w') as f:
         f.write(printdefault(cfgnames))
+    if not os.path.isdir(data_dir):
+        os.mkdir(data_dir)
+    #if not os.path.isdir(tmp_dir):
+    #    os.mkdir(tmp_dir)
 
 
 class import_handler():

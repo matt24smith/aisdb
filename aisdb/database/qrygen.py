@@ -51,29 +51,36 @@ class DBQuery(UserDict):
             else:
                 assert 'radius' in self.keys(), 'undefined radius'
 
-    #def crawl(self):
-    #    ''' returns an SQL query to crawl the database
-    #        query generated using given query function, parameters stored in self, and a callback function
-    #    '''
-    #    #return '\nUNION '.join(map(partial(qryfcn, callback=callback, kwargs=self), self['months'])) + '\nORDER BY 1, 2'
-    #    return crawl(**self)
-
     def check_idx(self, dbpath=dbpath):
         aisdatabase = DBConn(dbpath)
         for month in self.data['months']:
             aisdatabase.cur.execute(
-                f'create index if not exists idx_{month}_t_x_y on ais_202111_dynamic (time, longitude, latitude) ;'
-            )
-            aisdatabase.cur.execute(
-                f'SELECT * FROM sqlite_master WHERE type="table" and name="static_{month}_aggregate"'
-            )
-            result = aisdatabase.cur.fetchall()
-            if len(result) == 0:
+                'SELECT * FROM sqlite_master WHERE type="table" and name=?',
+                [f'static_{month}_aggregate'])
+            if len(aisdatabase.cur.fetchall()) == 0:
+                print(f'building static index for month {month}...')
                 aggregate_static_msgs(dbpath, [month])
+            aisdatabase.cur.execute(
+                'SELECT * FROM sqlite_master WHERE type="index" and name=?',
+                [f'idx_{month}_t_x_y'])
+            if len(aisdatabase.cur.fetchall()) == 0:
+                print(f'building dynamic index for month {month}...')
+                aisdatabase.cur.execute(
+                    f'CREATE INDEX idx_{month}_t_x_y ON ais_{month}_dynamic (time, longitude, latitude)'
+                )
 
     def run_qry(self, fcn=crawl, dbpath=dbpath, printqry=True):
-        ''' generates a query using self.crawl(), runs it, then returns the resulting rows '''
-        #qry = self.crawl(callback=callback, qryfcn=qryfcn)
+        ''' queries the database using the supplied sql function and dbpath
+
+            self: UserDict
+                dictionary containing kwargs
+
+            returns resulting rows
+
+            CAUTION: may use an excessive amount of memory for large queries
+            consider using gen_qry instead
+        '''
+
         q = fcn(**self)
         if printqry:
             print(q)
@@ -82,18 +89,6 @@ class DBQuery(UserDict):
 
         assert self.data['start'] < self.data['end'], 'invalid time range'
         assert len(self.data['months']) >= 1, f'bad qry {self=}'
-        '''
-        for month in self.data['months']:
-            aisdatabase.cur.execute(
-                f'create index if not exists idx_{month}_t_x_y on ais_202111_dynamic (time, longitude, latitude) ;'
-            )
-            aisdatabase.cur.execute(
-                f'SELECT * FROM sqlite_master WHERE type="table" and name="static_{month}_aggregate"'
-            )
-            result = aisdatabase.cur.fetchall()
-            if len(result) == 0:
-                aggregate_static_msgs(dbpath, [month])
-        '''
         self.check_idx()
 
         aisdatabase.cur.execute(q)

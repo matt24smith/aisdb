@@ -1,15 +1,16 @@
 ''' generation, segmentation, and filtering of vessel trajectories '''
 
-#import asyncio
 from functools import reduce
 from datetime import timedelta
+import json
 
 from gis import delta_knots
 
 import numpy as np
-#from sklearn.cluster import DBSCAN
 from gis import haversine, delta_knots
-''' utility functions '''
+
+#
+# utility functions
 
 
 def filtermask(track, rng, filters, first_val=False):
@@ -29,9 +30,6 @@ def filtermask(track, rng, filters, first_val=False):
     return np.append([first_val], mask).astype(bool)
 
 
-#def segment_rng(track: dict, maxdelta: timedelta, minsize: int) -> filter:
-#    splits_idx = lambda track: np.append(np.append([0], np.nonzero(track['time'][1:] - track['time'][:-1] >= maxdelta)[0]+1), [len(track['time'])])
-#    return filter(lambda seg: len(seg) >= minsize, list(map(range, splits_idx(track)[:-1], splits_idx(track)[1:])))
 def segment_rng(track: dict, maxdelta: timedelta, minsize: int) -> filter:
     assert isinstance(track, dict), f'wrong track type {type(track)}:\n{track}'
     splits_idx = lambda track: np.append(
@@ -157,78 +155,11 @@ def segment_tracks_timesplits(tracks, maxdelta=timedelta(hours=2), minsize=1):
             )
 
 
-def flag(track):
-    ''' returns True if any computed speed deltas exceed 50 knots '''
-
-    if track['time'].size == 1:
-        return False
-
-    if np.max(delta_knots(track, range(len(track['time'])))) > 50:
-        return True
-
-    return False
-
-
-"""
-def segment_tracks_dbscan(tracks, max_cluster_dist_km=50, flagfcn=flag):
-    '''
-        args:
-            tracks: iterable
-                iterable containing vessel trajectory dictionaries
-            max_cluster_dist_km:
-                approximate distance of how far points should be spread apart
-                while still considered to be part of the same cluster.
-                should be chosen relative to the smallest radius of network
-                graph node polygons
-            flagfcn:
-                callback function that accepts a track dictionary and returns
-                True or False. if True, the track will be clustered.
-                if False, the track will yield unchanged
-
-        yields:
-            clustered subset trajectories where computed speed deltas exceed 50 knots
-    '''
-
-    for track in tracks:
-
-        #if len(track['time']) == 1: continue
-
-        track['static'] = set(track['static']).union(set(['label']))
-
-        if not flagfcn(track):
-            track['label'] = -1
-            yield track.copy()
-
-        else:
-            # set epsilon to clustering distance, convert coords to radian, cluster with haversine metric
-            epsilon = max_cluster_dist_km / 6367  # 6367km == earth circumference
-            yx = np.vstack((list(map(np.deg2rad, track['lat'])), list(map(np.deg2rad, track['lon'])))).T
-            #clusters = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(yx)
-            algorithm = 'ball_tree' if len(track['time']) > 50 else 'brute'
-            clusters = DBSCAN(eps=epsilon, min_samples=1, algorithm=algorithm, metric='haversine').fit(yx)
-            #clusters = DBSCAN(eps=epsilon, min_samples=1, algorithm='brute', metric='haversine').fit(yx)
-
-            # yield track subsets assigned to cluster labels
-            for l in set(clusters.labels_):
-
-                mask = clusters.labels_ == l
-
-                yield dict(
-                        **{k:track[k] for k in track['static'] if k != 'label' },
-                        label   = l,
-                        **{k:track[k][mask] for k in track['dynamic']},
-                        static          = track['static'],
-                        dynamic         = track['dynamic'],
-                    ).copy()
-
-"""
-
-
 def segment_tracks_encode_greatcircledistance(tracks,
                                               maxdistance,
                                               cuttime,
                                               cutknots=50,
-                                              minscore=0.0000001):
+                                              minscore=1e-6):
     ''' if the distance between two consecutive points in the track exceeds
         given threshold, the track will be segmented '''
     '''
@@ -251,21 +182,19 @@ def segment_tracks_encode_greatcircledistance(tracks,
 
     score_idx = lambda scores: np.where(scores == np.max(scores))[0][-1]
     n = 0
-    lastmmsi = 0
     for track in tracks:
+        # segments_idx = np.nonzero(np.array(list(map(haversine,
+        # track['lon'][:-1], track['lat'][:-1],
+        # track['lon'][1:], track['lat'][1:]))) > 5000)[0]+1
+
+        segments_idx = reduce(
+            np.append, ([0], np.where(delta_knots(track) > cutknots)[0] + 1,
+                        [track['time'].size]))
+
         pathways = []
-        #segments_idx = np.nonzero(np.array(list(map(haversine, track['lon'][:-1], track['lat'][:-1], track['lon'][1:], track['lat'][1:]))) > 5000)[0]+1
-
-        segments_idx = reduce(np.append, ([
-            0
-        ], np.where(delta_knots(track, range(track['time'].size)) > 35)[0] + 1,
-                                          [track['time'].size]))
-
         for i in range(segments_idx.size - 1):
             if len(pathways) > 100:
-                print(
-                    f'warning: excessive number of pathways! mmsi={track["mmsi"]}'
-                )
+                print(f'excessive number of pathways! mmsi={track["mmsi"]}')
                 yield pathways.pop(0)
             scores = np.array([
                 score_fcn(xy1=(track['lon'][segments_idx[i]],
@@ -364,7 +293,7 @@ def mmsifilter(rowgen, mmsis=[]):
             return
 
 
-def max_tracklength(tracks, max_track_length=10000):
+def max_tracklength(tracks, max_track_length=100000):
     ''' applies a maximum track length to avoid excess memory consumption
 
         args:
@@ -425,6 +354,34 @@ def concat_realisticspeed(tracks, knots_threshold=50):
     yield segment
 
 
+def concat_occurs_after(tracks, grace_period=300):
+    ''' concatenate sequential tracks
+
+        if two consecutive tracks have the same mmsi and are temporally
+        sequential, concatenate them
+
+        by default allow a grace period to account for receiver delay
+    '''
+    segment = next(tracks)
+    for track in tracks:
+        if (segment['mmsi'] == track['mmsi']
+                and segment['time'][-1] - grace_period < track['time'][0]):
+            segment = dict(
+                **{k: segment[k]
+                   for k in segment['static']},
+                **{
+                    k: np.append(segment[k], track[k])
+                    for k in track['dynamic']
+                },
+                static=track['static'],
+                dynamic=set(track['dynamic']),
+            )
+        else:
+            yield segment
+            segment = track
+    yield segment
+
+
 def fence_tracks(tracks, domain):
     ''' compute points-in-polygons for track positional reports in domain polygons
 
@@ -441,9 +398,9 @@ def fence_tracks(tracks, domain):
         yield track
 
 
-def tracks_transit_frequency(tracks):
+def tracks_transit_frequency(tracks, domain):
     for track in tracks:
-        if not 'in_zone' in track.keys():
+        if 'in_zone' not in track.keys():
             track['in_zone'] = np.array([
                 domain.point_in_polygon(x, y)
                 for x, y in zip(track['lon'], track['lat'])
