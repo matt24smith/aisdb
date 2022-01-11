@@ -62,7 +62,7 @@ def sample_random_polygon(xscale=20, yscale=20):
     return x, y
 
 
-def zonegeoms_or_randompoly(randomize=False):
+def zonegeoms_or_randompoly(randomize=False, count=10):
     shapefilepaths = glob_files(zones_dir, '.txt')
     if len(shapefilepaths) > 0 and not randomize:
         zonegeoms = {
@@ -70,9 +70,8 @@ def zonegeoms_or_randompoly(randomize=False):
             for z in [ZoneGeomFromTxt(f) for f in shapefilepaths]
         }
     else:
-        print('no zone geometry found, fuzzing some new ones...')
         zonegeoms = {
             arrayhash(matrix): ZoneGeom(arrayhash(matrix), *matrix)
-            for matrix in [sample_random_polygon() for _ in range(10)]
+            for matrix in [sample_random_polygon() for _ in range(count)]
         }
     return zonegeoms

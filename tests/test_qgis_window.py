@@ -1,6 +1,6 @@
 import os
 from functools import partial
-from datetime import timedelta
+from datetime import datetime, timedelta
 import json
 
 import shapely
@@ -8,11 +8,11 @@ from shapely.geometry import Point, LineString, MultiPoint
 import requests
 
 from aisdb import output_dir
+from aisdb.database.lambdas import in_bbox
+from aisdb.database.qrygen import DBQuery
 from aisdb.gis import Domain
-from aisdb.proc_util import deserialize_generator
 from aisdb.qgis_window import ApplicationWindow
 from aisdb.track_gen import trackgen, segment_tracks_encode_greatcircledistance
-from aisdb.network_graph import fence_tracks, serialize_network_edge
 from tests.create_testing_data import zonegeoms_or_randompoly
 
 # Available platform plugins are: eglfs, linuxfb, minimal, minimalegl,
@@ -21,6 +21,8 @@ from tests.create_testing_data import zonegeoms_or_randompoly
 # os.environ['QT_QPA_PLATFORM'] = 'linuxfb'
 # os.environ['QT_PLUGIN_PATH'] = '/usr/lib/qt/plugins'
 # os.environ['XDG_RUNTIME_DIR'] = '/tmp/runtime-ais_env'
+start = datetime(2021, 11, 1)
+end = datetime(2021, 11, 2)
 
 
 def plot_pointfeature(viz):
@@ -51,28 +53,26 @@ def plot_polygon_geometry(viz):
 
 
 def plot_processed_track(viz):
-    fpath = os.path.join(output_dir, 'rowgen_year_test2.pickle')
+    zonegeoms = zonegeoms_or_randompoly(randomize=True, count=10)
+    domain = Domain(name='test', geoms=zonegeoms, cache=False)
 
-    #timesplit = partial(segment_tracks_timesplits,
-    #                    maxdelta=timedelta(hours=24))
+    # query db for points in domain bounding box
+    args = DBQuery(
+        start=start,
+        end=end,
+        xmin=domain.minX,
+        xmax=domain.maxX,
+        ymin=domain.minY,
+        ymax=domain.maxY,
+        callback=in_bbox,
+    )
+    rowgen = args.gen_qry()
+
     distsplit = partial(segment_tracks_encode_greatcircledistance,
-                        maxdistance=100000,
-                        cuttime=timedelta(hours=24),
-                        cutknots=50,
-                        minscore=0.000005)
-    zonegeoms = zonegeoms_or_randompoly()
-    domain = Domain(name="testdomain", geoms=zonegeoms, cache=False)
-    geofenced = partial(fence_tracks, domain=domain)
-    serialize = partial(serialize_network_edge, domain=domain)
-
-    #viz.clear_lines()
-    #viz.clear_points()
-    #viz = ApplicationWindow()
-    #testmmsi = [218158000, 316043424, 316015104]
-    testmmsi = [218158000, 316001088, 316043424, 316015104]
-    rowgen = deserialize_generator(fpath)
-    #tracks = max_tracklength(trackgen(mmsifilter(rowgen, mmsis=testmmsi)))
-    #tracks = distsplit(trackgen(mmsifilter(rowgen, mmsis=testmmsi)))
+                        maxdistance=250000,
+                        cuttime=timedelta(weeks=1),
+                        cutknots=45,
+                        minscore=5e-07)
     tracks = distsplit(trackgen(rowgen))
     #tracks = distsplit(trackgen(mmsifilter(rowgen, mmsis=testmmsi)))
 
@@ -89,7 +89,7 @@ def plot_processed_track(viz):
             viz.add_feature_line(linegeom, ident=track['mmsi'] + 1000)
         n += 1
         print(f'{n}', end='|')
-        if n > 100:
+        if n > 25:
             break
     # viz.focus_canvas_item(domain=domain)
 
