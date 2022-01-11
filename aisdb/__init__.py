@@ -110,13 +110,10 @@ class import_handler():
 with import_handler() as importconfigs:
 
     from .database.create_tables import (
-        sqlite_create_table_msg18,
-        sqlite_create_table_msg123,
         sqlite_create_table_polygons,
-        create_table_msg5,
-        create_table_msg24,
-        create_table_msg27,
         aggregate_static_msgs,
+        sqlite_createtable_dynamicreport,
+        sqlite_createtable_staticreport,
     )
 
     from .database.dbconn import (DBConn)
