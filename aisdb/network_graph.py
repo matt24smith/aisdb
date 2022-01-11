@@ -47,8 +47,8 @@ staticinfo = lambda track: dict(
     mmsi=track['mmsi'],
     imo=track['imo'] or '',
     label=track['label'] if 'label' in track.keys() else '',
-    vessel_name=track['vessel_name'].replace("'", '').replace('"', '').replace(
-        ',', '').replace('`', '') or '',
+    vessel_name=str(track['vessel_name']).replace("'", '').replace('"', '').
+    replace(',', '').replace('`', '') or '',
     #vessel_type=track['ship_type_txt'] or '',
     #domainname                          =   domain.name,
     vessel_length=(track['dim_bow'] + track['dim_stern']) or '',
