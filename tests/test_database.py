@@ -20,31 +20,41 @@ if not os.path.isdir(data_dir):
 #if not os.path.isdir(os.path.join(data_dir, 'testdb')):
 #    os.mkdir(os.path.join(data_dir, 'testdb'))
 
-dbpath = os.path.join(data_dir, 'test1.db')
+db = os.path.join(data_dir, 'test1.db')
 
-aisdatabase = DBConn(dbpath=dbpath)
-conn, cur = aisdatabase.conn, aisdatabase.cur
+if os.path.isfile(db):
+    os.remove(db)
+
+#conn, cur = aisdatabase.conn, aisdatabase.cur
 
 
 def test_create_static_table():
-    sqlite_createtable_staticreport(cur, month="202009")
-    conn.commit()
+    aisdatabase = DBConn(dbpath=db)
+    sqlite_createtable_staticreport(aisdatabase.cur, month="202009")
+    aisdatabase.conn.close()
 
 
 def test_create_dynamic_table():
 
-    sqlite_createtable_dynamicreport(cur, month="202009")
-    conn.commit()
+    aisdatabase = DBConn(dbpath=db)
+    sqlite_createtable_dynamicreport(aisdatabase.cur, month="202009")
+    aisdatabase.conn.commit()
+    aisdatabase.conn.close()
 
 
 def test_create_static_aggregate_table():
-    _ = sqlite_createtable_staticreport(cur, "202009")
-    conn.commit()
-    aggregate_static_msgs(dbpath, ["202009"])
-    conn.commit()
+    aisdatabase = DBConn(dbpath=db)
+    _ = sqlite_createtable_staticreport(aisdatabase.cur, "202009")
+    aggregate_static_msgs(db, ["202009"])
+    aisdatabase.conn.close()
 
 
 def test_query_emptytable():
+    aisdatabase = DBConn(dbpath=db)
+    cur = aisdatabase.cur
+    sqlite_createtable_staticreport(cur, month="202009")
+    sqlite_createtable_dynamicreport(cur, month="202009")
+    aisdatabase.conn.commit()
 
     dt = datetime.now()
     rowgen = DBQuery(
@@ -52,10 +62,8 @@ def test_query_emptytable():
         end=end,
         callback=in_timerange_validmmsi,
     )
-    #rowgen.run_qry(dbpath=dbpath, qryfcn=static)
-    rows = rowgen.run_qry()
+    #rowgen.run_qry(dbpath=db, qryfcn=static)
+    rows = rowgen.gen_qry(dbpath=db)
     delta = datetime.now() - dt
     print(f'query time: {delta.total_seconds():.2f}s')
-
-
-os.remove(dbpath)
+    aisdatabase.conn.close()

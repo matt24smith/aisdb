@@ -72,20 +72,20 @@ def aggregate_static_msgs(dbpath, months_str):
             dbpath (string)
                 path to SQLite database file
 
-            months_str (string)
-                string describing the month of the tables to be aggregated.
-                format: YYYYMM
+            months_str (array)
+                array of strings with format: YYYYmm
     '''
 
     aisdb = DBConn(dbpath=dbpath)
     conn, cur = aisdb.conn, aisdb.cur
 
     for month in months_str:
+        sqlite_createtable_staticreport(cur, month)
         print(f'aggregating static reports into static_{month}_aggregate...')
-        cur.execute(f'DROP TABLE IF EXISTS static_{month}_aggregate')
         cur.execute(f'SELECT DISTINCT s.mmsi FROM ais_{month}_static AS s')
-
         mmsis = np.array(cur.fetchall(), dtype=object).flatten()
+
+        cur.execute(f'DROP TABLE IF EXISTS static_{month}_aggregate')
 
         fancyprint = lambda cols, widths=[
             12, 24, 12, 12, 12, 12, 12, 12
