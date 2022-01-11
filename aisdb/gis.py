@@ -18,16 +18,16 @@ shiftcoord = lambda x, rng=360: ((np.array(x) + (rng / 2)) % 360) - (rng / 2)
 
 def dt_2_epoch(dt_arr, t0=datetime(1970, 1, 1, 0, 0, 0)):
     ''' convert datetime.datetime to epoch minutes '''
-    delta = lambda dt: (dt - t0).total_seconds() // 60
+    delta = lambda dt: (dt - t0).total_seconds()
     if isinstance(dt_arr, (list, np.ndarray)):
-        return np.array(list(map(int, map(delta, dt_arr))))
+        return np.array(list(map(float, map(delta, dt_arr))))
     elif isinstance(dt_arr, (datetime)):
         return int(delta(dt_arr))
     else:
         raise ValueError('input must be datetime or array of datetimes')
 
 
-def epoch_2_dt(ep_arr, t0=datetime(1970, 1, 1, 0, 0, 0), unit='minutes'):
+def epoch_2_dt(ep_arr, t0=datetime(1970, 1, 1, 0, 0, 0), unit='seconds'):
     ''' convert epoch minutes to datetime.datetime '''
     delta = lambda ep, unit: t0 + timedelta(**{f'{unit}': ep})
     if isinstance(ep_arr, (list, np.ndarray)):
@@ -56,8 +56,10 @@ def delta_meters(track, rng):
 
 
 def delta_seconds(track, rng):
-    return np.array(list(
-        (track['time'][rng][1:] - track['time'][rng][:-1]))) * 60
+    return np.array(
+        list(
+            #(track['time'][rng][1:] - track['time'][rng][:-1]))) * 60
+            (track['time'][rng][1:] - track['time'][rng][:-1])))
 
 
 def delta_knots(track, rng):
@@ -84,6 +86,30 @@ def strdms2dd(strdms):
     d, m, s, ax = [v for v in strdms.replace("''", '"').split(' ') if v != '']
     return dms2dd(float(d.rstrip('°')), float(m.rstrip("'")),
                   float(s.rstrip('"')), ax.upper())
+
+
+def radial_coordinate_boundary(x, y, radius=100000):
+    ''' checks maximum coordinate range for a given point and radial distance in meters '''
+
+    xmin, xmax = x, x
+    ymin, ymax = y, y
+
+    # TODO: compute precise value instead of approximating
+    while haversine(x, y, xmin, y) < radius:
+        xmin -= 0.05
+    while haversine(x, y, xmax, y) < radius:
+        xmax += 0.05
+    while haversine(x, y, x, ymin) < radius:
+        ymin -= 0.05
+    while haversine(x, y, x, ymax) < radius:
+        ymax += 0.05
+
+    return {
+        'xmin': xmin,
+        'xmax': xmax,
+        'ymin': ymin,
+        'ymax': ymax,
+    }
 
 
 class ZoneGeom():
