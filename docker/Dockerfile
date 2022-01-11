@@ -15,13 +15,15 @@ WORKDIR "/home/$USERNAME"
 FROM aisdb AS runtest
 RUN pacman -S --noconfirm --needed qgis nodejs npm python-sphinx python-sphinx_rtd_theme
 ARG USERNAME
+#RUN mkdir -p ais && chown "$USERNAME" ais
 USER "$USERNAME"
 RUN python -m ensurepip && python -m pip install --no-warn-script-location --upgrade wheel pip numpy pytest
 COPY --chown="$USERNAME" ./setup.py "/home/$USERNAME/setup.py"
-RUN mkdir -p aisdb/database aisdb/webdata && python -m pip install . --no-warn-script-location
+RUN mkdir -p ais ais/tmp_parsing ais/zones ais/rawdata_dir ais/scriptoutput aisdb/database aisdb/webdata \
+  && python -m pip install . --no-warn-script-location 
 COPY --chown="$USERNAME" tests/ tests/
 COPY --chown="$USERNAME" aisdb/ aisdb/ 
-CMD ["python", "-m", "pytest", "--color=yes", "-x", "--tb=native", "tests/"]
+CMD ["python", "-m", "pytest", "--color=yes", "--tb=native", "tests/", "-k", "not qgis"]
 
 
 # forward X11 on sshd host
