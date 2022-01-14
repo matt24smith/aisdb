@@ -4,7 +4,22 @@ stages:
   - build
   - test
 
+python-build:
+  stage: build
+  script:
+    - python -m pip install -e .
+
 python-tests:
   stage: test
   script:
     - python -m pytest --color=yes --tb=native -s tests/ -k "not qgis and not merge"
+
+rust-build:
+  stage: build
+  script:
+    - cargo build --manifest-path=/home/ais_env/aisdb_rust/Cargo.toml --release
+
+rust-test:
+  stage: test
+  script:
+    - cargo test --manifest-path=/home/ais_env/aisdb_rust/Cargo.toml --release --color=always -- --nocapture
