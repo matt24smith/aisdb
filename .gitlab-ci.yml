@@ -7,5 +7,4 @@ stages:
 python-tests:
   stage: test
   script:
-    - docker-compose up aisdb_test --build 
     - python -m pytest --color=yes --tb=native -s tests/ -k "not qgis and not merge"
