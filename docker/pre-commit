@@ -22,7 +22,7 @@ projdir = subprocess.check_output(
 # parse package version
 v = version.Version(aisdb.__version__)
 vstr = f'{v.major}.{v.minor}.{v.micro}'
-#bump = f'{v.major}.{v.minor}.{v.micro+1}'
+bump = f'{v.major}.{v.minor}.{v.micro+1}'
 bump = vstr
 bumpv = f'__version__ = "{bump}"\n'
 print(f'\nbumping package version:\t{bumpv}\n')
@@ -73,11 +73,5 @@ with open(versionfilepath, 'w') as f:
     f.write(bumpv)
 
 # add the new version file to commit
-cmd = 'git add ./aisdb/version.py'.split()
+cmd = 'git add ./aisdb/version.py changelog.rst'.split()
 subprocess.run(cmd, check=True)
-cmd2 = 'git add --intent-to-add changelog.rst'.split()
-subprocess.run(cmd2, check=True)
-'''
-        --git-dir={projdir}{os.path.sep}git
-        --work-tree={projdir}
-'''
