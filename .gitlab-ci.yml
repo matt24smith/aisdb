@@ -1,0 +1,29 @@
+image: meridiancfi/aisdb:latest
+
+stages:
+  - rust-build
+  - python-build
+  - rust-test
+  - python-test
+
+rust-build:
+  stage: rust-build
+  script:
+    - cargo build --manifest-path=/home/ais_env/aisdb_rust/Cargo.toml --release
+
+python-build:
+  stage: python-build
+  script:
+    - python -m pip install .
+
+rust-test:
+  stage: rust-test
+  script:
+    - cargo test --manifest-path=/home/ais_env/aisdb_rust/Cargo.toml --release --color=always -- --nocapture
+
+# skip tests requiring a desktop environment or web data sources
+python-test:
+  stage: python-test
+  script:
+    - python -m pip install .
+    - python -m pytest --color=yes --tb=native tests/ -k "not qgis and not merge"

@@ -1,0 +1,68 @@
+version: '3.9'
+
+services:
+
+  aisdb_rust:
+    container_name: aisdb_rust
+    environment:
+      - RUST_BACKTRACE=1
+    build:
+      target: test_rust
+      context: .
+      dockerfile: ./docker/Dockerfile
+    networks:
+      - ipv6_private
+
+  aisdb_test:
+    container_name: aisdb_test
+    build:
+      target: test_python
+      context: .
+      dockerfile: ./docker/Dockerfile
+    networks:
+      - ipv6_private
+
+  aisdb_docs:
+    container_name: aisdb_docs
+    build: 
+      target: webserv
+      context: .
+      dockerfile: ./docker/Dockerfile
+    expose:
+      - "8085"
+    networks:
+      - ipv6_private
+
+  aisdb_sshd:
+    container_name: aisdb_sshd
+    build: 
+      target: sshhost
+      context: .
+      dockerfile: ./docker/Dockerfile
+    expose:
+      - "22"
+    secrets:
+      - host_ssh_key
+      - host_authorized_keys
+    volumes:
+      - ${DATA_DIR}:/home/ais_env/ais
+    networks:
+      - ipv6_private 
+
+
+secrets:
+  host_ssh_key:
+    file: ~/.ssh/id_aisdb
+  host_authorized_keys:
+    file: ~/.ssh/id_aisdb.pub
+
+
+networks:
+  ipv6_private:
+    name: ipv6_private
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "fc00:0:0::/120"
+          gateway: "fc00:0:0::1"
+
