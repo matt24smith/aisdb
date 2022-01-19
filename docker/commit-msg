@@ -1,0 +1,3 @@
+#!/bin/sh
+git add changelog.rst
+git commit -m 'update changelog' --no-verify
