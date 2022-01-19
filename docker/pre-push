@@ -1,3 +1,3 @@
 #!/bin/sh
-git add changelog.rst --update
-git commit -m 'update changelog'
+git add aisdb/version.py changelog.rst
+git commit -m 'update version and changelog' --no-verify
