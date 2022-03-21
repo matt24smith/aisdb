@@ -3,8 +3,8 @@
     d.mmsi, 
     d.time, 
     d.longitude,
-    d.latitude
+    d.latitude,
     d.cog, 
-    d.sog,
+    d.sog
   FROM ais_{}_dynamic AS d
   WHERE
