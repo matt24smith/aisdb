@@ -2,6 +2,24 @@
 Changelog
 =========
 
+v1.0.82
+-------
+
+improved contextualization of multi-part messages in rust decoder and bump rust dependency versions
+
+
+v1.0.81
+-------
+
+rewrite web scraper
+
+
+v1.0.80
+-------
+
+fix filepath error when creating database tables
+
+
 v1.0.79
 -------
 
